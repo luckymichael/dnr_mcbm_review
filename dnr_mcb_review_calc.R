@@ -1,12 +1,13 @@
 library(ggplot2, quietly = TRUE)
 library(stringr, quietly = TRUE)
-library(plyr, quietly = TRUE)
+#library(plyr, quietly = TRUE)
 library(dplyr, quietly = TRUE)
 library(data.table)
+library(base)
 
 setwd("D:\\Cloud\\OneDrive\\!DNR\\mcbm_review")
-rrca.path <- "G:\\dnr\\RRCA\\MCB_Review\\RRCA_RUNS\\"
-mcb.path <- "G:\\dnr\\RRCA\\MCB_Review\\MCB_ModelFiles_ModelsOnly20160714\\ModelFiles20160714\\MCB_Model\\working_TR\\"
+rrca.path <- "E:\\dnr\\RRCA\\MCB_Review\\RRCA_RUNS\\"
+mcb.path <- "E:\\dnr\\RRCA\\MCB_Review\\MCB_ModelFiles_ModelsOnly20160714\\ModelFiles20160714\\MCB_Model\\working_TR\\"
 acre2foot = 43560.0
 
 
@@ -190,10 +191,10 @@ rzone = c(1, 0, 1)
 rdate = seq(as.Date("1951-01-15"),as.Date("2013-12-15"),by="month")
 rnday = sapply(rdate, FUN = ndays)
 
-rrca.flow = readBud(fname = paste0(rrca.path, "2000.2.csv"), zn = rzone)
+rrca.flow = readBud(fname = paste0(rrca.path, "baseline\\2000.2.csv"), zn = rzone)
 nper = 600
 for (i in 2001:2013) {
-  flow = readBud(fname = paste0(rrca.path, i, ".2.csv"), zn = rzone)
+  flow = readBud(fname = paste0(rrca.path, "baseline\\", i, ".2.csv"), zn = rzone)
   flow$PERIOD = flow$PERIOD + nper
   rrca.flow = rbind(rrca.flow, flow)
   nper = nper + 12
@@ -215,7 +216,7 @@ mzone = c(1, 0)
 mdate = seq(as.Date("1950-01-15"),as.Date("2013-12-15"),by="month")
 mnday = sapply(mdate, FUN = ndays)
 
-mcb.flow = readBud(fname = paste0(mcb.path, "mcb.2.csv"), zn = rzone)
+mcb.flow = readBud(fname = paste0(mcb.path, "baseline\\mcb.2.csv"), zn = rzone)
 mcb.flow.mon = aggregate(mcb.flow[,5:14], list(MONTH=mcb.flow$PERIOD), mean)
 mcb.flow.mon$MONTH = mdate
 mcb.flow.mon[,2:11] = mcb.flow.mon[,2:11] * mnday / mcb.area * 12 # inch / month  # /acre2foot # / mcb.area * 12 # inch / month
@@ -223,7 +224,8 @@ mcb.flow.year = aggregate(mcb.flow.mon[,2:11], list(YEAR=year(mdate)), sum)
 
 
 #### budget plots ####
-pn = function(x) if (x >= 0) return("Flow In Aquifer") else return("Flow Out Aquifer")
+pn = function(x) if (x >= 0) return("Flow In To Aquifer") else return("Flow Out From Aquifer")
+
 modflow_type = function(x) {
   if (x == "RESERV. LEAKAGE") x = "BASEFLOW"
   if (x == "RIVER LEAKAGE") x = "BASEFLOW"
@@ -300,23 +302,73 @@ ggsave("annual_budget.png",g,dpi=600,width=6*scale, height=4*scale,units="in")
 # depletion test ----------------------------------------------------------
 
 ### mcb model ###
-mcb.dflow = readBud(fname = paste0(mcb.path, "Loc5.2.csv"), zn = rzone)
-mcb.dflow.mon = aggregate(mcb.dflow[,5:14], list(MONTH=mcb.dflow$PERIOD), mean)
-mcb.dflow.mon$WELLS
-mcb.dflow.mon$MONTH = mdate
-mcb.dflow.mon[,2:11] = mcb.dflow.mon[,2:11] * mnday / mcb.area * 12 # inch / month  # /acre2foot # / mcb.area * 12 # inch / month
-mcb.dflow.mon[,2:11] = mcb.dflow.mon[,2:11] - mcb.flow.mon[,2:11]
-mcb.dflow.year = aggregate(mcb.dflow.mon[,2:11], list(YEAR=year(mdate)), sum) 
 
 
+mcb.dpump = data.frame(MONTH = mcb.flow.mon$MONTH)
 
-g = ggplot(data = mflow, aes(x = MONTH, y = value, fill=variable, group=variable))  +
+loc = "Loc2"
+
+
+### rrca model ###
+paste0(rrca.path, loc, "\\2000.2.csv")
+
+read.mcb.bud = function(fname){
+  mcb.dflow = readBud(fname = fname, zn = mzone)
+  mcb.dflow.mon = aggregate(mcb.dflow[,-(1:4)], list(MONTH=mcb.dflow$PERIOD), mean)
+  mcb.dflow.mon$MONTH = mdate
+  
+  mcb.dflow.mon$STREAM.LEAKAGE = mcb.dflow.mon$`STREAM LEAKAGE` + mcb.dflow.mon$`RESERV. LEAKAGE` + mcb.dflow.mon$`RIVER LEAKAGE`
+  
+  mflow = melt(select(mcb.dflow.mon, -`STREAM LEAKAGE`, -`RESERV. LEAKAGE`, -`RIVER LEAKAGE`), id.vars="MONTH", variable.name = "Flow Term")
+  mflow$value = mflow$value / acre2foot 
+  mflow$Model = "MCB"
+  return(mflow)
+}
+
+read.rrca.bud = function(basedir){
+  if (!(endsWith(basedir, "\\") | endsWith(basedir, "/"))) basedir = paste0(basedir,"/")
+  rrca.dflow = readBud(fname = paste0(basedir, "2000.2.csv"), zn = rzone)
+  nper = 600
+  for (i in 2001:2013) {
+    flow = readBud(fname = paste0(basedir, i, ".2.csv"), zn = rzone)
+    flow$PERIOD = flow$PERIOD + nper
+    rrca.dflow = rbind(rrca.dflow, flow)
+    nper = nper + 12
+  }
+  
+  rrca.dflow.mon = aggregate(rrca.dflow[,-(1:4)], list(MONTH=rrca.dflow$PERIOD), mean)
+  rrca.dflow.mon$MONTH = rdate
+  #rrca.dflow.mon[,-1] = rrca.dflow.mon[,-1] - rrca.flow.mon[,-1]
+  
+  rflow = melt(rrca.dflow.mon, id.vars="MONTH", variable.name = "Flow Term")
+  rflow$value = rflow$value * 86400 / acre2foot # acre-foot/day
+  rflow$Model = "RRCA"
+  return(rflow)
+}
+
+# read baseline
+rflow.bas = read.rrca.bud(basedir = paste0(rrca.path, "baseline"))
+mflow.bas = read.mcb.bud(paste0(mcb.path, "baseline.2.csv"))
+
+rflow.1 = read.rrca.bud(paste0(rrca.path, loc))
+rflow.1$value = rflow.1$value - rflow.bas$value
+rflow.1$InOut = sapply(rflow.1$value, pn)
+
+mflow.1 = read.mcb.bud(paste0(mcb.path, loc,".2.csv"))
+mflow.1$value = mflow.1$value - mflow.bas$value
+mflow.1$InOut = sapply(mflow.1$value, pn)
+
+g = ggplot(data = filter(rbind(rflow.1, mflow.1), value != 0), aes(x = MONTH, y = value, fill=`Flow Term`, group=`Flow Term`))  +
   geom_area() +
   xlab("Time") +
-  ylab("Flow rate (inch/month)") +
-  #scale_fill_brewer(palette = "Set1") +
-  facet_grid(InOut ~ ., scales="free_y")
+  ylab("Change in Flow Rate (acre-foot/day)") +
+  scale_fill_brewer(palette = "Set1") +
+  facet_grid(InOut ~ Model, scales="free_y")
+scale=1
+ggsave(paste0("depletion_mcb_", loc, ".png"),g,dpi=600,width=7*scale, height=5*scale,units="in")
 
+
+ggplot(filter(rflow.1, `Flow Term`=="STREAM LEAKAGE"), aes(x=MONTH,y=value)) + geom_line()
 
 g = ggplot(data = rflow, aes(x = MONTH, y = value, fill=variable, group=variable))  +
   geom_area() +
@@ -325,3 +377,13 @@ g = ggplot(data = rflow, aes(x = MONTH, y = value, fill=variable, group=variable
   scale_fill_brewer(palette = "Set1") +
   facet_grid(FLOW ~ ., scales="free_y")
 
+
+rrca.dflow[,-(1:4)] = rrca.dflow1[,-(1:4)] - rrca.dflow[,-(1:4)]
+plot(rrca.dflow$WELLS)
+rrca.dflow$PERIOD = 1:nrow(rrca.dflow)
+rflow = melt(select(rrca.dflow, -TIME,-ZONE,-STEP), id.vars="PERIOD", variable.name = "Flow Term")
+rflow$InOut = sapply(rflow$value, pn)
+ggplot(data = rflow, aes(x = PERIOD, y = value, fill=`Flow Term`, group=`Flow Term`))  +
+  geom_area() +
+  scale_fill_brewer(palette = "Set1") +
+  facet_grid(InOut ~ ., scales="free_y")
