@@ -1,5 +1,5 @@
 ---
-title: 'Peer Review of the Medicine Creek Basin Model'
+title: 'Technical Memorandum: Peer Review of the Medicine Creek Basin Model'
 author: "Michael Ou \n ougengxin@gmail.com"
 email: "ougengxin@gmail.com"
 date: "October 9, 2016"
@@ -108,7 +108,7 @@ DNR has provided the data of 51 groundwater monitoring wells (Figure 2). All the
 
 ![Figure 2. Locations of Monitoring Wells](wel_locations.png)
 
-The performance of simulating observed groundwater levels are evaluated using two statisticics: mean absolute error (MAE) and coefficient of determination ($R^2$). The mean absolute error (MAE) is a quantity used to measure how close the simulated groundwater levels are to the observations. On the other hand, the coefficient of determination ($R^2$) indicates how much the model predicts the variability of the observaed groundwater levels. The values of this two statisticics are listed in Table 3 for each monitoring wells. Interestingly, the MCB model performs better based on MAE while the opposite for $R^2$. The RRCA model is better than the MCB model on simulating the variability in observed groundwater levels. This can also be confirmed from the hydragraph plots. This may be attributed to several reasons: 1. more accurate stress inputs, such as recharge, pumping and ET, are used in the RRCA model; 2. the RRCA model is better in simulating the responses to stresses.
+The performance of simulating observed groundwater levels are evaluated using two statisticics: mean absolute error (MAE) and coefficient of determination ($R^2$). The mean absolute error (MAE) is a quantity used to measure how close the simulated groundwater levels are to the observations. On the other hand, the coefficient of determination ($R^2$) indicates how much the model predicts the variability of the observaed groundwater levels. The values of this two statisticics are listed in Table 3 for each monitoring wells. Interestingly, the MCB model performs better based on MAE while the opposite for $R^2$. Nearly always, the reponses in the MCB model are too dull. Most seasonal change and decadal trends are not represented properly in the MCB model. The RRCA model is better than the MCB model on simulating the variability in observed groundwater levels. This can also be confirmed from the hydragraph plots. It may be attributed to several reasons: 1. more accurate stress inputs, such as recharge, pumping and ET, are used in the RRCA model; 2. the RRCA model is better in simulating the responses to stresses.
 
 *Table 3 Model performance on groudnwater level simulation*
 
@@ -168,12 +168,12 @@ The performance of simulating observed groundwater levels are evaluated using tw
 | PRep20  | 72    | 10.76 | 20.72 | 0.33 | 0.39 |
 | Average | 67.4  | 11.23 | 24.60 | 0.40 | 0.43 |
 
-## 4.2 Model Water Budget
-The monthly net flow rates are shown in Figure 3. The baseflows in the RRCA model vary significantly more rapily than the MCB model. This could be attribute to the larger groundwater ET in the RRCA model. The pumping rates of these two models are similar. In the MCB model, there are some spiky values in the recharge rates in 1952 and 1957, leading to two rapid responses in the aquifer storage.
+### 4.2 Model Water Budget
+The monthly net flow rates are shown in Figure 3. The baseflows in the RRCA model vary significantly more rapily than the MCB model. This could be attribute to the larger groundwater ET in the RRCA model. The pumping rates of these two models are similar. In the MCB model, there are some spiky values in the recharge rates in 1952 and 1957, leading to two rapid changes in the aquifer storage.
 
 ![Figure 3. Monthly Flow Rate.](monthly_budget.png)
 
-As shown in Figure 4 and Figure 5, two models surprisingly predict the opposite trends in the aquifer storage changes. Please note that MODFLOW output storage is the opposite of the aquifer change. Therefore in the MCB model, the aquifer storage has been steadily reducing, which may be caused by that recharge is significantly smaller than the sum of pumping and baseflow. 
+As shown in Figure 4 and 5, two models surprisingly predict the contradictory trends in the aquifer storage changes. Note that MODFLOW output storage is the inverse of the aquifer change. Therefore in the MCB model, the aquifer storage has been steadily reducing, which may be caused by that recharge is significantly smaller than the sum of pumping and baseflow. 
 
 ![Figure 4. Comparison of Cumulative Flow](cum_budget.png)
 
@@ -182,12 +182,36 @@ As shown in Figure 4 and Figure 5, two models surprisingly predict the opposite 
 
 ## 5. Performance of Stream Depletion Simulation
 
-There are five locations are randomly selected for performing stream depletion tests (Figure 6). In each test, a new pumping well is added at the location to both models with a constant pumping rate of 0.2 ft^3^/s. 
+Five locations are randomly selected for stream depletion tests (Figure 6). In each test, a new pumping well is added at the location to both models with a constant pumping rate of 0.2 ft^3^/s. The responses at different locations are shown in Figure 7 to 11. For each plot, the upper subplot include the flow change to compesating the addtional pumping added to the system. The water sources for new pumping are mainly groundwater storage and stream leakage. For the locations near the boundary, lateral flow from other zones is also an important source. Overall, the RRCA model has higher stream depletion factors compared to the MCB model. Because the ET in the RRCA baseline model is relatively large, it also impacts the response by having more reduced ET. 
+
+Note that at Location 5, the pumping rate of the new pumping well is reduced by the NWT solver in the MCB model to prevent the cell becoming dry. As a result, the groundater storage becomes the single source for pumping. At Location 3, the response of stream leakage reduces at the end of the modeling period in the MCB model. This may be caused by a disconnected or dry stream segment. It requires further investigation. 
 
 ![Figure 6. Locations of Stream Depletion Tests](dep_locations.png)
 
-## 6. Conclusion
+![Figure 7. Simulated reponse at Location 1](depletion_Loc1.png)
 
+![Figure 8. Simulated reponse at Location 2](depletion_Loc2.png)
+
+![Figure 9. Simulated reponse at Location 3](depletion_Loc3.png)
+
+![Figure 10. Simulated reponse at Location 4](depletion_Loc4.png)
+
+![Figure 11. Simulated reponse at Location 5](depletion_Loc5.png)
+
+Figure 12 shows the cumulative flow change percentages based on the pumping rate of the new well. For stream leakage, it is the value of the stream depletion factor (SDF). 
+
+![Figure 12. Simulated reponse at Location 5](depletion_cum.png)
+
+## 6. Conclusion
+Overall, the MCB model is well constrcuted. However, there are several issues in the model:
+
+1. the relatively flattened groundwater level hydrograph which could indicate the model lacks capability of reproducing the correct responses to hydraulic stresses;
+2. the spiky recharge rates at the beginning of the simulation;
+3. relative small groundwater ET and recharge compared to the RRCA model;
+4. overall smaller SDF compared to the RRCA model;
+5. the NWT solver reducing pumping rate of the new well can affect the result of 10/50 analysis such as discontinuing the SDF distribution.
+
+For future work, the reviewer also recommend to perform the SDF calculation at every cell in the model to test the impact of the NWT solver.
 
 
 ## Appendix 1. Hydrograph of Groundwater Levels

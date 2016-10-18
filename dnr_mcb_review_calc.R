@@ -3,11 +3,11 @@ library(stringr, quietly = TRUE)
 #library(plyr, quietly = TRUE)
 library(dplyr, quietly = TRUE)
 library(data.table)
-library(base)
 
 setwd("D:\\Cloud\\OneDrive\\!DNR\\mcbm_review")
-rrca.path <- "E:\\dnr\\RRCA\\MCB_Review\\RRCA_RUNS\\"
-mcb.path <- "E:\\dnr\\RRCA\\MCB_Review\\MCB_ModelFiles_ModelsOnly20160714\\ModelFiles20160714\\MCB_Model\\working_TR\\"
+harddrive = "g"
+rrca.path <- paste0(harddrive, ":\\dnr\\RRCA\\MCB_Review\\RRCA_RUNS\\")
+mcb.path <-  paste0(harddrive, ":\\dnr\\RRCA\\MCB_Review\\MCB_ModelFiles_ModelsOnly20160714\\ModelFiles20160714\\MCB_Model\\working_TR\\")
 acre2foot = 43560.0
 
 
@@ -133,7 +133,7 @@ readBud <- function(fname, itype, zn){
   #head(bs)
   #print(fname)
   
-  ntype <- match("From Other Zones", names(bs)) - match("ZONE", names(bs)) - 1
+  ntype <- match("Total IN", names(bs)) - match("ZONE", names(bs)) - 1
   if ( missing(itype)) itype <- 1:ntype
   itype <- itype[itype >=1 & itype <= ntype]
   
@@ -143,7 +143,7 @@ readBud <- function(fname, itype, zn){
   bs <- filter(bs, ZONE!=0)
   
   #get the type you want
-  f<- bs[,4+itype] - bs[,4+itype+ntype+2]
+  f<- bs[,4+itype] - bs[,4+itype+ntype+1]
   
   #write.csv(bs,"text.csv")
   #aggregate by zone and time step
@@ -301,27 +301,30 @@ ggsave("annual_budget.png",g,dpi=600,width=6*scale, height=4*scale,units="in")
 
 # depletion test ----------------------------------------------------------
 
-### mcb model ###
 
 
-mcb.dpump = data.frame(MONTH = mcb.flow.mon$MONTH)
 
-loc = "Loc2"
-
-
-### rrca model ###
-paste0(rrca.path, loc, "\\2000.2.csv")
-
+# zones = rep(1,10) # for stream depletion analysis, the response outside the model area is also included; otherwise the flow from other zones need to be included
 read.mcb.bud = function(fname){
   mcb.dflow = readBud(fname = fname, zn = mzone)
   mcb.dflow.mon = aggregate(mcb.dflow[,-(1:4)], list(MONTH=mcb.dflow$PERIOD), mean)
   mcb.dflow.mon$MONTH = mdate
-  
   mcb.dflow.mon$STREAM.LEAKAGE = mcb.dflow.mon$`STREAM LEAKAGE` + mcb.dflow.mon$`RESERV. LEAKAGE` + mcb.dflow.mon$`RIVER LEAKAGE`
   
+
+  
   mflow = melt(select(mcb.dflow.mon, -`STREAM LEAKAGE`, -`RESERV. LEAKAGE`, -`RIVER LEAKAGE`), id.vars="MONTH", variable.name = "Flow Term")
+  mflow$`Flow Term` = recode_factor(mflow$`Flow Term`, "STREAM.LEAKAGE" = "STREAM LEAKAGE")
   mflow$value = mflow$value / acre2foot 
   mflow$Model = "MCB"
+  
+  # mcb.cflow.mon = mcb.dflow.mon
+  # mcb.cflow.mon[-1] = mcb.cflow.mon[-1] * mnday
+  # for (i in 2:ncol(mcb.cflow.mon)) mcb.cflow.mon[,i] = cumsum(mcb.cflow.mon[,i])
+  # cflow = melt(mcb.cflow.mon, id.vars="MONTH", variable.name = "Flow Term")
+  # cflow$value = cflow$value / acre2foot # acre-foot/day
+  # mflow$CumFlow = cflow$value
+  
   return(mflow)
 }
 
@@ -338,11 +341,21 @@ read.rrca.bud = function(basedir){
   
   rrca.dflow.mon = aggregate(rrca.dflow[,-(1:4)], list(MONTH=rrca.dflow$PERIOD), mean)
   rrca.dflow.mon$MONTH = rdate
+  
   #rrca.dflow.mon[,-1] = rrca.dflow.mon[,-1] - rrca.flow.mon[,-1]
   
   rflow = melt(rrca.dflow.mon, id.vars="MONTH", variable.name = "Flow Term")
   rflow$value = rflow$value * 86400 / acre2foot # acre-foot/day
   rflow$Model = "RRCA"
+  
+  ## cumulative flow
+  # rrca.cflow.mon = rrca.dflow.mon
+  # rrca.cflow.mon[-1] = rrca.cflow.mon[-1] * rnday
+  # for (i in 2:ncol(rrca.cflow.mon)) rrca.cflow.mon[,i] = cumsum(rrca.cflow.mon[,i])
+  # cflow = melt(rrca.cflow.mon, id.vars="MONTH", variable.name = "Flow Term")
+  # cflow$value = cflow$value * 86400 / acre2foot # acre-foot/day
+  # rflow$CumFlow = cflow$value
+  
   return(rflow)
 }
 
@@ -350,23 +363,59 @@ read.rrca.bud = function(basedir){
 rflow.bas = read.rrca.bud(basedir = paste0(rrca.path, "baseline"))
 mflow.bas = read.mcb.bud(paste0(mcb.path, "baseline.2.csv"))
 
-rflow.1 = read.rrca.bud(paste0(rrca.path, loc))
-rflow.1$value = rflow.1$value - rflow.bas$value
-rflow.1$InOut = sapply(rflow.1$value, pn)
 
-mflow.1 = read.mcb.bud(paste0(mcb.path, loc,".2.csv"))
-mflow.1$value = mflow.1$value - mflow.bas$value
-mflow.1$InOut = sapply(mflow.1$value, pn)
+cumflow = NULL
 
-g = ggplot(data = filter(rbind(rflow.1, mflow.1), value != 0), aes(x = MONTH, y = value, fill=`Flow Term`, group=`Flow Term`))  +
-  geom_area() +
-  xlab("Time") +
-  ylab("Change in Flow Rate (acre-foot/day)") +
-  scale_fill_brewer(palette = "Set1") +
-  facet_grid(InOut ~ Model, scales="free_y")
-scale=1
-ggsave(paste0("depletion_mcb_", loc, ".png"),g,dpi=600,width=7*scale, height=5*scale,units="in")
+for (i in 1:5){
+  loc = paste0("Loc", i)
+  rflow.1 = read.rrca.bud(paste0(rrca.path, loc))
+  rflow.1$value = rflow.1$value - rflow.bas$value
+  rflow.1$InOut = sapply(rflow.1$value, pn)
+  
+  mflow.1 = read.mcb.bud(paste0(mcb.path, loc,".2.csv"))
+  mflow.1$value = mflow.1$value - mflow.bas$value
+  mflow.1$InOut = sapply(mflow.1$value, pn)
+  
+  
+  # cumulative
+  rc = summarise(group_by(rflow.1, `Flow Term`), sum(value*rnday))
+  mc = summarise(group_by(mflow.1, `Flow Term`), sum(value*mnday))
+  rc$Model = "RRCA"; mc$Model = "MCB"
+  names(rc) = c("Flow Term", "Cumulative Flow", "Model")
+  names(mc) = c("Flow Term", "Cumulative Flow", "Model")
+  c = rbind(rc, mc)
+  c$Loc = loc
+  cumflow = rbind(cumflow, c)
+  
+  
+  db = filter(rbind(rflow.1, mflow.1), value != 0)
+  db$`Flow Term` = relevel(db$`Flow Term`, ref="STREAM LEAKAGE")
+  
+  
+  g = ggplot(data = db, aes(x = MONTH, y = value, fill=`Flow Term`, group=`Flow Term`))  +
+    geom_area() +
+    xlab("Time") +
+    ylab("Change in Flow Rate (acre-foot/day)") +
+    scale_fill_brewer(palette = "Set1") +
+    facet_grid(InOut ~ Model, scales="free_y")
+  scale=1.4
+  ggsave(paste0("depletion_", loc, ".png"),g,dpi=600,width=7*scale, height=4*scale,units="in")
+  
+}
 
+c = filter(cumflow, `Flow Term` != 'RECHARGE',`Flow Term` != 'CONSTANT HEAD',`Flow Term` != 'DRAINS',`Flow Term` != 'MNW2', `Flow Term` != 'HEAD DEP BOUNDS')
+c$`Cumulative Flow` = -c$`Cumulative Flow`/c$`Cumulative Flow`[match(str_c("WELLS", c$Model, c$Loc), str_c(c$`Flow Term`, c$Model, c$Loc))] * 100
+c = filter(c, `Flow Term` != "WELLS")
+
+
+g = ggplot(data=c, aes(x=Loc, y=`Cumulative Flow`, fill=Model)) +
+  geom_bar(stat="identity", position="dodge", size = 1) +
+  #geom_text(aes(label = sprintf("%3.2f",Flow)), position = position_dodge(width=1), vjust = -0.25) + 
+  ylab("Cumulative Flow change (%)") +
+  #scale_y_continuous(breaks=seq(-80, 100, 20)) +
+  #theme(axis.text.x  = element_text(angle=90, vjust=0.5)) +
+  facet_grid(`Flow Term` ~ .) 
+ggsave(paste0("depletion_cum.png"),g,dpi=600,width=7*scale, height=6*scale,units="in")
 
 ggplot(filter(rflow.1, `Flow Term`=="STREAM LEAKAGE"), aes(x=MONTH,y=value)) + geom_line()
 
